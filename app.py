@@ -451,16 +451,3 @@ if st.session_state.get("audit_results"):
             else:
                 st.info("No new content ideas suggested.")
 
-# =============================
-# Footer help
-# =============================
-st.markdown(
-    """
-    <hr/>
-    <small>
-    Tip: Add your Gemini key in <code>.streamlit/secrets.toml</code> as <code>GEMINI_API_KEY="your_key"</code>.\
-    You can also set an environment variable <code>GEMINI_API_KEY</code>.
-    </small>
-    """,
-    unsafe_allow_html=True,
-)
