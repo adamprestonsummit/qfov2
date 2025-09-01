@@ -311,8 +311,7 @@ model_choice = st.sidebar.selectbox(
     "Gemini model",
     [
         # Include current 2.5 options; keep 1.5 for compatibility
-        "gemini-2.5-flash-latest",
-        "gemini-2.5-pro-latest",
+      
         "gemini-1.5-flash-latest",
         "gemini-1.5-pro-latest",
     ],
