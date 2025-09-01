@@ -12,7 +12,7 @@ from bs4 import BeautifulSoup
 # App config
 # =============================
 st.set_page_config(page_title="Qforia", layout="wide")
-st.title("🔍 Qforia: Query Fan‑Out + Content Audit")
+st.title("🔍 Qforia: Query Fan‑Out + Content Audit + Briefs")
 
 # =============================
 # Utilities
@@ -203,6 +203,30 @@ def CONTENT_AUDIT_PROMPT(expanded_queries: list[dict], page_snapshot: dict) -> s
     )
 
 
+def CONTENT_BRIEF_PROMPT(idea: dict, url: str | None = None) -> str:
+    """Generate a structured content brief for a new content idea."""
+    return (
+        "You are a senior content strategist. Create a professional content brief "
+        "for the following idea that was generated during a content audit. "
+        "The brief should be practical and directly usable by a content writer.\n\n"
+        "Return ONLY JSON with this schema:\n"
+        "{\n"
+        "  \"title\": str,\n"
+        "  \"objective\": str,\n"
+        "  \"target_audience\": str,\n"
+        "  \"search_intent\": str,\n"
+        "  \"key_messages\": [str],\n"
+        "  \"proposed_outline\": [str],\n"
+        "  \"seo_keywords\": [str],\n"
+        "  \"tone_and_style\": str,\n"
+        "  \"calls_to_action\": [str],\n"
+        "  \"notes\": str\n"
+        "}\n\n"
+        f"IDEA: {json.dumps(idea, ensure_ascii=False)}\n"
+        f"RELATED_URL (if any): {url or 'N/A'}"
+    )
+
+
 # =============================
 # Generation functions
 # =============================
@@ -261,6 +285,24 @@ def audit_urls_against_queries(model, urls: list[str], expanded_queries: list[di
     return results
 
 
+def generate_content_briefs(model, ideas: list[dict], url: str | None = None) -> list[dict]:
+    briefs = []
+    for i, idea in enumerate(ideas, start=1):
+        with st.spinner(f"Creating content brief {i}/{len(ideas)}..."):
+            try:
+                prompt = CONTENT_BRIEF_PROMPT(idea, url)
+                resp = model.generate_content(prompt)
+                jt = clean_model_json(getattr(resp, "text", ""))
+                briefs.append(json.loads(jt))
+            except Exception as e:
+                briefs.append({
+                    "title": idea.get("title"),
+                    "error": f"Brief generation failed: {e}",
+                })
+        time.sleep(0.3)
+    return briefs
+
+
 # =============================
 # Sidebar controls
 # =============================
@@ -268,8 +310,11 @@ st.sidebar.header("Configuration")
 model_choice = st.sidebar.selectbox(
     "Gemini model",
     [
+        # Include current 2.5 options; keep 1.5 for compatibility
         "gemini-2.5-flash-latest",
         "gemini-2.5-pro-latest",
+        "gemini-1.5-flash-latest",
+        "gemini-1.5-pro-latest",
     ],
     index=0,
 )
@@ -448,6 +493,49 @@ if st.session_state.get("audit_results"):
                     outline = idea.get("outline") or []
                     if outline:
                         st.markdown("- " + "\n- ".join(outline))
+
+                # Generate briefs button per URL
+                if st.button(f"📝 Generate content briefs for {url}", key=f"briefs_btn_{url}"):
+                    briefs = generate_content_briefs(model, ideas, url)
+                    st.session_state[f"briefs_{url}"] = briefs
+                    st.success("Briefs generated!")
+
             else:
                 st.info("No new content ideas suggested.")
+
+            # Render briefs if present
+            if st.session_state.get(f"briefs_{url}"):
+                briefs = st.session_state[f"briefs_{url}"]
+                for b in briefs:
+                    if b.get("error"):
+                        st.error(b["error"])
+                        continue
+                    st.markdown(f"#### 📄 Brief: {b.get('title','(untitled)')}")
+                    left, right = st.columns(2)
+                    left.write(f"**Objective:** {b.get('objective','')}")
+                    right.write(f"**Search intent:** {b.get('search_intent','')}")
+                    st.write(f"**Target audience:** {b.get('target_audience','')}")
+                    st.write(f"**Tone & style:** {b.get('tone_and_style','')}")
+                    if b.get("key_messages"):
+                        st.write("**Key messages:**")
+                        st.markdown("- " + "\n- ".join(b.get("key_messages", [])))
+                    if b.get("proposed_outline"):
+                        st.write("**Outline:**")
+                        st.markdown("- " + "\n- ".join(b.get("proposed_outline", [])))
+                    if b.get("seo_keywords"):
+                        st.write("**SEO keywords:** " + ", ".join(b.get("seo_keywords", [])))
+                    if b.get("calls_to_action"):
+                        st.write("**CTAs:** " + ", ".join(b.get("calls_to_action", [])))
+                    if b.get("notes"):
+                        st.write(f"**Notes:** {b.get('notes')}")
+
+                # Download briefs JSON per URL
+                st.download_button(
+                    "📄 Download briefs JSON",
+                    data=json.dumps(briefs, ensure_ascii=False, indent=2).encode("utf-8"),
+                    file_name=f"qforia_briefs_{re.sub(r'[^a-zA-Z0-9]+','_', url)}.json",
+                    mime="application/json",
+                    key=f"briefs_dl_{url}",
+                )
+
 
