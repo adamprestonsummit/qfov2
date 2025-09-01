@@ -268,8 +268,8 @@ st.sidebar.header("Configuration")
 model_choice = st.sidebar.selectbox(
     "Gemini model",
     [
-        "gemini-1.5-flash-latest",
-        "gemini-1.5-pro-latest",
+        "gemini-2.5-flash-latest",
+        "gemini-2.5-pro-latest",
     ],
     index=0,
 )
